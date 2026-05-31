@@ -1,4 +1,4 @@
-package com.example
+package com.watchnav.com
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 object NavNotificationHelper {
     private const val CHANNEL_ID = "watchnav_alerts_v1"
     private const val CHANNEL_NAME = "WatchNav Alerts"
-    private const val SERVICE_NOTIFICATION_ID = 1001
+    const val SERVICE_NOTIFICATION_ID = 1001
     private const val ALERT_NOTIFICATION_ID = 1002
 
     private val _currentDirection = MutableStateFlow<NavDirection?>(null)
@@ -67,8 +67,15 @@ object NavNotificationHelper {
             direction.instruction
         }
 
+        // Prepend action to street name if available
+        val displayStreet = if (direction.action.isNotBlank()) {
+            "${direction.action}: ${direction.street}"
+        } else {
+            direction.street
+        }
+
         // Truncate street name to 40 characters
-        val text = direction.street.take(40)
+        val text = displayStreet.take(40)
 
         // Return builder matching user specification
         return NotificationCompat.Builder(context, CHANNEL_ID)
@@ -89,14 +96,8 @@ object NavNotificationHelper {
     fun post(context: Context, direction: NavDirection) {
         _currentDirection.value = direction
         val notificationManager = getNotificationManager(context)
-        
-        // Post the real alert notification that maps to the watch (ID 1002)
         val notification = buildNotification(context, direction)
         notificationManager.notify(ALERT_NOTIFICATION_ID, notification)
-
-        // Also post the quiet persistent keep-alive service notification (ID 1001)
-        val serviceNotif = buildServiceNotification(context)
-        notificationManager.notify(SERVICE_NOTIFICATION_ID, serviceNotif)
     }
 
     /**
@@ -104,8 +105,6 @@ object NavNotificationHelper {
      */
     fun cancel(context: Context) {
         _currentDirection.value = null
-        val notificationManager = getNotificationManager(context)
-        notificationManager.cancel(ALERT_NOTIFICATION_ID)
-        notificationManager.cancel(SERVICE_NOTIFICATION_ID)
+        getNotificationManager(context).cancel(ALERT_NOTIFICATION_ID)
     }
 }

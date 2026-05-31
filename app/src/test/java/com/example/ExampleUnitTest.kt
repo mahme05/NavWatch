@@ -1,4 +1,4 @@
-package com.example
+package com.watchnav.com
 
 import org.junit.Assert.*
 import org.junit.Test
