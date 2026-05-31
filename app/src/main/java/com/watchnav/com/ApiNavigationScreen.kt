@@ -120,6 +120,8 @@ fun ApiNavigationScreen(
 
     fun fetchRoute() {
         if (destination.isBlank()) return
+        val prefs = context.getSharedPreferences("watchnav_prefs", Context.MODE_PRIVATE)
+        val navSource = prefs.getString("nav_source", "api_google") ?: "api_google"
         coroutineScope.launch {
             isLoading = true
             try {
@@ -128,39 +130,86 @@ fun ApiNavigationScreen(
                     errorMessage = "Could not get current location"
                     return@launch
                 }
-                val apiKey = context.getSharedPreferences("watchnav_prefs", Context.MODE_PRIVATE)
-                    .getString("maps_api_key", "") ?: ""
-
-                val response = DirectionsApi.service.getDirections(
-                    origin = "${location.latitude},${location.longitude}",
-                    destination = destination,
-                    apiKey = apiKey,
-                    mode = selectedMode
-                )
-                if (response.status != "OK") {
-                    errorMessage = "API Error: ${response.status}"
-                    return@launch
-                }
-                val leg = response.routes.firstOrNull()?.legs?.firstOrNull()
-                if (leg == null) {
-                    errorMessage = "No route found"
-                    return@launch
-                }
-                val parsedSteps = leg.steps.map { step ->
-                    NavDirection(
-                        instruction = parseInstruction(step.html_instructions),
-                        distance = step.distance.text,
-                        street = parseInstruction(step.html_instructions),
-                        action = maneuverToAction(step.maneuver)
+                if (navSource == "api_ors") {
+                    val apiKey = prefs.getString("ors_api_key", "") ?: ""
+                    val geocodeResp = OrsApi.geocoding.geocode(text = destination, apiKey = apiKey)
+                    val destCoords = geocodeResp.features.firstOrNull()?.geometry?.coordinates
+                    if (destCoords == null || destCoords.size < 2) {
+                        errorMessage = "Could not find destination: check the address"
+                        return@launch
+                    }
+                    val destLon = destCoords[0]
+                    val destLat = destCoords[1]
+                    val orsResp = OrsApi.directions.getDirections(
+                        profile = orsModeToProfile(selectedMode),
+                        apiKey = apiKey,
+                        request = OrsDirectionsRequest(
+                            coordinates = listOf(
+                                listOf(location.longitude, location.latitude),
+                                listOf(destLon, destLat)
+                            )
+                        )
                     )
+                    val route = orsResp.routes.firstOrNull()
+                    if (route == null) {
+                        errorMessage = "No route found"
+                        return@launch
+                    }
+                    val allSteps = route.segments.flatMap { it.steps }
+                    val geomCoords = route.geometry.coordinates
+                    val parsedSteps = allSteps.map { step ->
+                        NavDirection(
+                            instruction = step.instruction,
+                            distance = formatOrsDistance(step.distance),
+                            street = step.name,
+                            action = orsStepTypeToAction(step.type)
+                        )
+                    }
+                    val endLocations = allSteps.map { step ->
+                        val idx = step.way_points.last().coerceIn(0, geomCoords.size - 1)
+                        val coord = geomCoords[idx]
+                        LatLngPoint(lat = coord[1], lng = coord[0])
+                    }
+                    stepsState.value = parsedSteps
+                    endLocationsState.value = endLocations
+                    currentStepState.value = 0
+                    isArrivedState.value = false
+                    totalDistance = formatOrsDistance(route.summary.distance)
+                    totalDuration = "${(route.summary.duration / 60).toInt()} min"
+                    NavNotificationHelper.post(context, parsedSteps.first())
+                } else {
+                    val apiKey = prefs.getString("maps_api_key", "") ?: ""
+                    val response = DirectionsApi.service.getDirections(
+                        origin = "${location.latitude},${location.longitude}",
+                        destination = destination,
+                        apiKey = apiKey,
+                        mode = selectedMode
+                    )
+                    if (response.status != "OK") {
+                        errorMessage = "API Error: ${response.status}"
+                        return@launch
+                    }
+                    val leg = response.routes.firstOrNull()?.legs?.firstOrNull()
+                    if (leg == null) {
+                        errorMessage = "No route found"
+                        return@launch
+                    }
+                    val parsedSteps = leg.steps.map { step ->
+                        NavDirection(
+                            instruction = parseInstruction(step.html_instructions),
+                            distance = step.distance.text,
+                            street = parseInstruction(step.html_instructions),
+                            action = maneuverToAction(step.maneuver)
+                        )
+                    }
+                    stepsState.value = parsedSteps
+                    endLocationsState.value = leg.steps.map { it.end_location }
+                    currentStepState.value = 0
+                    isArrivedState.value = false
+                    totalDistance = leg.distance.text
+                    totalDuration = leg.duration.text
+                    NavNotificationHelper.post(context, parsedSteps.first())
                 }
-                stepsState.value = parsedSteps
-                endLocationsState.value = leg.steps.map { it.end_location }
-                currentStepState.value = 0
-                isArrivedState.value = false
-                totalDistance = leg.distance.text
-                totalDuration = leg.duration.text
-                NavNotificationHelper.post(context, parsedSteps.first())
             } catch (e: java.io.IOException) {
                 errorMessage = "No internet connection"
             } catch (e: Exception) {

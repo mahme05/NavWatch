@@ -38,9 +38,13 @@ fun ApiKeySetupScreen(
     var showKey by remember { mutableStateOf(false) }
     var hasError by remember { mutableStateOf(false) }
 
+    val prefs = context.getSharedPreferences("watchnav_prefs", Context.MODE_PRIVATE)
+    val provider = prefs.getString("nav_source", "api_google") ?: "api_google"
+    val isOrs = provider == "api_ors"
+
     LaunchedEffect(Unit) {
-        val prefs = context.getSharedPreferences("watchnav_prefs", Context.MODE_PRIVATE)
-        apiKey = prefs.getString("maps_api_key", "") ?: ""
+        apiKey = if (isOrs) prefs.getString("ors_api_key", "") ?: ""
+                 else prefs.getString("maps_api_key", "") ?: ""
     }
 
     Column(
@@ -63,7 +67,7 @@ fun ApiKeySetupScreen(
             }
             Spacer(modifier = Modifier.width(4.dp))
             Text(
-                text = "Set Up API Key",
+                text = if (isOrs) "Set Up ORS API Key" else "Set Up API Key",
                 fontSize = 22.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Color(0xFFE6E1E5)
@@ -71,7 +75,8 @@ fun ApiKeySetupScreen(
         }
 
         Text(
-            text = "Required once — free tier covers ~10,000 trips/month",
+            text = if (isOrs) "Required once — free tier: 2,000 requests/day"
+                   else "Required once — free tier covers ~10,000 trips/month",
             fontSize = 13.sp,
             color = Color(0xFFCAC4D0)
         )
@@ -94,51 +99,92 @@ fun ApiKeySetupScreen(
                 HorizontalDivider(color = Color(0xFF49454F))
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Step 1 — clickable link
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
+                if (isOrs) {
+                    Row(
                         modifier = Modifier
-                            .size(24.dp)
-                            .background(Color(0xFF4A4458), RoundedCornerShape(12.dp)),
-                        contentAlignment = Alignment.Center
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "1",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp,
-                            color = Color(0xFFEADDFF)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(16.dp))
-                    TextButton(
-                        onClick = {
-                            context.startActivity(
-                                Intent(Intent.ACTION_VIEW, Uri.parse("https://console.cloud.google.com"))
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .background(Color(0xFF4A4458), RoundedCornerShape(12.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "1",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = Color(0xFFEADDFF)
                             )
-                        },
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Text(
-                            text = "Go to console.cloud.google.com",
-                            fontSize = 14.sp,
-                            color = Color(0xFFD0BCFF),
-                            textDecoration = TextDecoration.Underline
-                        )
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        TextButton(
+                            onClick = {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, Uri.parse("https://openrouteservice.org/dev/#/signup"))
+                                )
+                            },
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Text(
+                                text = "Go to openrouteservice.org and sign up",
+                                fontSize = 14.sp,
+                                color = Color(0xFFD0BCFF),
+                                textDecoration = TextDecoration.Underline
+                            )
+                        }
                     }
+                    InstructionStep(order = "2", text = "Verify your email and log in to the developer dashboard")
+                    InstructionStep(order = "3", text = "Click 'Request a Token' under the free plan")
+                    InstructionStep(order = "4", text = "Give the token any name and click 'Create Token'")
+                    InstructionStep(order = "5", text = "Copy the generated token and paste it below")
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .background(Color(0xFF4A4458), RoundedCornerShape(12.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "1",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = Color(0xFFEADDFF)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        TextButton(
+                            onClick = {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, Uri.parse("https://console.cloud.google.com"))
+                                )
+                            },
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Text(
+                                text = "Go to console.cloud.google.com",
+                                fontSize = 14.sp,
+                                color = Color(0xFFD0BCFF),
+                                textDecoration = TextDecoration.Underline
+                            )
+                        }
+                    }
+                    InstructionStep(order = "2", text = "Sign in with your Google account")
+                    InstructionStep(order = "3", text = "Click 'Select a project' → 'New Project', give it any name")
+                    InstructionStep(order = "4", text = "Go to 'APIs & Services' → 'Enable APIs and Services'")
+                    InstructionStep(order = "5", text = "Search for 'Directions API' and click Enable")
+                    InstructionStep(order = "6", text = "Go to 'APIs & Services' → 'Credentials'")
+                    InstructionStep(order = "7", text = "Click 'Create Credentials' → 'API Key'")
+                    InstructionStep(order = "8", text = "Copy the generated key and paste it below")
                 }
-
-                InstructionStep(order = "2", text = "Sign in with your Google account")
-                InstructionStep(order = "3", text = "Click 'Select a project' → 'New Project', give it any name")
-                InstructionStep(order = "4", text = "Go to 'APIs & Services' → 'Enable APIs and Services'")
-                InstructionStep(order = "5", text = "Search for 'Directions API' and click Enable")
-                InstructionStep(order = "6", text = "Go to 'APIs & Services' → 'Credentials'")
-                InstructionStep(order = "7", text = "Click 'Create Credentials' → 'API Key'")
-                InstructionStep(order = "8", text = "Copy the generated key and paste it below")
             }
         }
 
@@ -183,7 +229,8 @@ fun ApiKeySetupScreen(
                     supportingText = if (hasError) {
                         {
                             Text(
-                                "Key must start with 'AIza' and be 39 characters",
+                                if (isOrs) "Key must be at least 20 characters"
+                                else "Key must start with 'AIza' and be 39 characters",
                                 color = Color(0xFFF2B8B5)
                             )
                         }
@@ -205,11 +252,11 @@ fun ApiKeySetupScreen(
                 Button(
                     onClick = {
                         val trimmed = apiKey.trim()
-                        if (trimmed.startsWith("AIza") && trimmed.length == 39) {
-                            context.getSharedPreferences("watchnav_prefs", Context.MODE_PRIVATE)
-                                .edit()
-                                .putString("maps_api_key", trimmed)
-                                .apply()
+                        val valid = if (isOrs) trimmed.length >= 20
+                                    else trimmed.startsWith("AIza") && trimmed.length == 39
+                        if (valid) {
+                            val prefKey = if (isOrs) "ors_api_key" else "maps_api_key"
+                            prefs.edit().putString(prefKey, trimmed).apply()
                             onKeySaved()
                         } else {
                             hasError = true
@@ -228,7 +275,8 @@ fun ApiKeySetupScreen(
                 }
 
                 Text(
-                    text = "Your key is stored only on this device and never sent anywhere except Google's servers.",
+                    text = if (isOrs) "Your key is stored only on this device and never sent anywhere except OpenRouteService servers."
+                           else "Your key is stored only on this device and never sent anywhere except Google's servers.",
                     fontSize = 11.sp,
                     color = Color(0xFF49454F),
                     textAlign = TextAlign.Center,
