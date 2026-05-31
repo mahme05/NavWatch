@@ -1,4 +1,4 @@
-package com.example
+package com.watchnav.com
 
 import android.Manifest
 import android.content.ComponentName
@@ -38,7 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import com.example.ui.theme.MyApplicationTheme
+import com.watchnav.com.ui.theme.MyApplicationTheme
 
 class MainActivity : ComponentActivity() {
 
@@ -107,14 +107,7 @@ fun DashboardScreen(modifier: Modifier = Modifier) {
                               isPackageInstalled(context, "com.nothing.smartcenter")
     }
 
-    // Run system configuration check initially and on resume
-    DisposableEffect(Unit) {
-        checkStatus()
-        onDispose {}
-    }
-
-    // Poll status on user entering screen or navigating back
-    LaunchedEffect(key1 = true) {
+    LaunchedEffect(Unit) {
         checkStatus()
     }
 
@@ -155,7 +148,8 @@ fun DashboardScreen(modifier: Modifier = Modifier) {
                 val dummyDirection = NavDirection(
                     instruction = "Turn Right onto Grand Avenue",
                     distance = "250 m",
-                    street = "Grand Ave"
+                    street = "Grand Ave",
+                    action = "Right"
                 )
                 NavNotificationHelper.post(context, dummyDirection)
                 Toast.makeText(context, "Simulated navigation notification sent!", Toast.LENGTH_SHORT).show()
@@ -534,7 +528,11 @@ fun ActiveNavigationCard(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = activeDirection.street,
+                            text = if (activeDirection.action.isNotBlank()) {
+                                "${activeDirection.action}: ${activeDirection.street}"
+                            } else {
+                                activeDirection.street
+                            },
                             fontSize = 14.sp,
                             color = Color(0xFFBFCFAD),
                             textAlign = TextAlign.Center

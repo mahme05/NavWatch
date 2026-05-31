@@ -1,4 +1,4 @@
-package com.example
+package com.watchnav.com
 
 /**
  * Represents parsed turn-by-turn direction data.
@@ -6,5 +6,6 @@ package com.example
 data class NavDirection(
     val instruction: String,
     val distance: String,
-    val street: String
+    val street: String,
+    val action: String = ""
 )
