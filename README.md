@@ -1,5 +1,7 @@
 # WatchNav
 
+> Vibe coded with Claude Code.
+
 Bridge turn-by-turn navigation from Google Maps or Waze to your **CMF Watch 3 Pro** (or any Nothing smartwatch) — no root, no ADB, no subscriptions.
 
 ## How It Works
