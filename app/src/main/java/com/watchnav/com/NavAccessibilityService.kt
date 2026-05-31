@@ -38,7 +38,6 @@ class NavAccessibilityService : AccessibilityService() {
             )
             NavNotificationHelper.post(applicationContext, direction)
         }
-        root.recycle()
     }
 
     private fun traverseForSteps(node: AccessibilityNodeInfo?, results: MutableList<String>) {
