@@ -48,8 +48,10 @@ fun resolveStartScreen(context: Context): Screen {
     val prefs = context.getSharedPreferences("watchnav_prefs", Context.MODE_PRIVATE)
     return when (prefs.getString("nav_source", null)) {
         "notification", "accessibility" -> Screen.DASHBOARD
-        "api" -> if (prefs.getString("maps_api_key", null) != null) Screen.API_NAV
-                 else Screen.API_KEY_SETUP
+        "api", "api_google" -> if (prefs.getString("maps_api_key", null) != null) Screen.API_NAV
+                               else Screen.API_KEY_SETUP
+        "api_ors" -> if (prefs.getString("ors_api_key", null) != null) Screen.API_NAV
+                     else Screen.API_KEY_SETUP
         else -> Screen.SOURCE_SELECT
     }
 }
@@ -94,7 +96,7 @@ class MainActivity : ComponentActivity() {
                                 prefs.edit().putString("nav_source", source).apply()
                                 currentScreen = when (source) {
                                     "notification" -> Screen.DASHBOARD
-                                    "api" -> Screen.API_KEY_SETUP
+                                    "api_google", "api_ors" -> Screen.API_KEY_SETUP
                                     "accessibility" -> {
                                         val shown = prefs.getBoolean("accessibility_guide_shown", false)
                                         if (shown) Screen.DASHBOARD else Screen.ACCESSIBILITY_GUIDE

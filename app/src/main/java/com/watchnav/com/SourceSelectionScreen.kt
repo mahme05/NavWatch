@@ -85,7 +85,26 @@ fun SourceSelectionScreen(
                 "Free tier: 10,000 requests/month"
             ),
             warningText = null,
-            onSelect = { onSelect("api") }
+            onSelect = { onSelect("api_google") }
+        )
+
+        SourceCard(
+            emoji = "🌐",
+            title = "OpenRouteService API",
+            description = "Open-source routing — fetches route via ORS and tracks via GPS",
+            pros = listOf(
+                "Free & open-source — no billing account needed",
+                "2,000 requests/day on free tier",
+                "Privacy-friendly alternative to Google",
+                "Step advances automatically based on GPS location"
+            ),
+            cons = listOf(
+                "Requires a free ORS API key (guided setup inside app)",
+                "Geocodes addresses separately — slightly slower first load",
+                "Coverage may be lower in some regions vs Google"
+            ),
+            warningText = null,
+            onSelect = { onSelect("api_ors") }
         )
 
         SourceCard(
