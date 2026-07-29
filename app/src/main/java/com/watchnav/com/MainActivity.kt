@@ -151,9 +151,11 @@ fun DashboardScreen(
     var isMapsInstalled by remember { mutableStateOf(false) }
     var isNothingXInstalled by remember { mutableStateOf(false) }
     val isServiceConnected by NavListenerService.isServiceConnected.collectAsState()
+    val isBridgeEnabled by BridgeState.isEnabled.collectAsState()
     val activeDirection by NavNotificationHelper.currentDirection.collectAsState()
 
     val checkStatus = {
+        BridgeState.isEnabledNow(context)   // loads the persisted value on first pass
         isNotificationEnabled = isNotificationServiceEnabled(context)
         isMapsInstalled = isPackageInstalled(context, "com.google.android.apps.maps") ||
                           isPackageInstalled(context, "com.waze")
@@ -176,9 +178,23 @@ fun DashboardScreen(
     ) {
         AppHeader(onChangeMethod = onChangeMethod)
 
+        BridgeToggleCard(
+            isEnabled = isBridgeEnabled,
+            onToggle = { enabled ->
+                BridgeState.setEnabled(context, enabled)
+                Toast.makeText(
+                    context,
+                    if (enabled) "WatchNav on — directions will be sent to your watch"
+                    else "WatchNav off — Maps will be ignored",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        )
+
         GlobalStatusCard(
             isNotificationEnabled = isNotificationEnabled,
-            isServiceConnected = isServiceConnected
+            isServiceConnected = isServiceConnected,
+            isBridgeEnabled = isBridgeEnabled
         )
 
         CustomActionPanel(
@@ -278,12 +294,91 @@ fun AppHeader(modifier: Modifier = Modifier, onChangeMethod: (() -> Unit)? = nul
     }
 }
 
+/**
+ * Master on/off switch. Off means WatchNav stays quiet while Maps is running,
+ * without having to revoke notification access or uninstall anything.
+ */
+@Composable
+fun BridgeToggleCard(
+    isEnabled: Boolean,
+    onToggle: (Boolean) -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = if (isEnabled) Color(0xFF211F24) else Color(0xFF1F1D22)
+        ),
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.fillMaxWidth().testTag("bridge_toggle_card"),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (isEnabled) Color(0xFFD0BCFF).copy(alpha = 0.4f) else Color(0xFF49454F).copy(alpha = 0.4f)
+        )
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(
+                        if (isEnabled) Color(0xFF4A4458) else Color(0xFF2B2930),
+                        RoundedCornerShape(20.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Navigation,
+                    contentDescription = null,
+                    tint = if (isEnabled) Color(0xFFD0BCFF) else Color(0xFF938F99),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (isEnabled) "WatchNav is ON" else "WatchNav is OFF",
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp,
+                    color = if (isEnabled) Color(0xFFE6E1E5) else Color(0xFFCAC4D0)
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = if (isEnabled) {
+                        "Directions are forwarded to your watch whenever Maps navigates."
+                    } else {
+                        "Maps navigation is ignored. Nothing is sent to your watch."
+                    },
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                    color = Color(0xFFCAC4D0)
+                )
+            }
+
+            Switch(
+                checked = isEnabled,
+                onCheckedChange = onToggle,
+                modifier = Modifier.testTag("bridge_toggle_switch"),
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color(0xFF381E72),
+                    checkedTrackColor = Color(0xFFD0BCFF),
+                    uncheckedThumbColor = Color(0xFF938F99),
+                    uncheckedTrackColor = Color(0xFF2B2930)
+                )
+            )
+        }
+    }
+}
+
 @Composable
 fun GlobalStatusCard(
     isNotificationEnabled: Boolean,
-    isServiceConnected: Boolean
+    isServiceConnected: Boolean,
+    isBridgeEnabled: Boolean = true
 ) {
-    val isSystemReady = isNotificationEnabled && isServiceConnected
+    val isPermissionReady = isNotificationEnabled && isServiceConnected
+    val isSystemReady = isPermissionReady && isBridgeEnabled
 
     Card(
         colors = CardDefaults.cardColors(containerColor = Color(0xFF4A4458)),
@@ -309,16 +404,28 @@ fun GlobalStatusCard(
                 Box(
                     modifier = Modifier
                         .background(
-                            if (isSystemReady) Color(0xFFD0BCFF) else Color(0xFFF2B8B5),
+                            when {
+                                isSystemReady -> Color(0xFFD0BCFF)
+                                isPermissionReady -> Color(0xFFCAC4D0)   // paused by the user
+                                else -> Color(0xFFF2B8B5)
+                            },
                             shape = RoundedCornerShape(100.dp)
                         )
                         .padding(horizontal = 12.dp, vertical = 4.dp)
                 ) {
                     Text(
-                        text = if (isSystemReady) "ACTIVE" else "REQUIRED",
+                        text = when {
+                            isSystemReady -> "ACTIVE"
+                            isPermissionReady -> "PAUSED"
+                            else -> "REQUIRED"
+                        },
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (isSystemReady) Color(0xFF381E72) else Color(0xFF601410)
+                        color = when {
+                            isSystemReady -> Color(0xFF381E72)
+                            isPermissionReady -> Color(0xFF1C1B1F)
+                            else -> Color(0xFF601410)
+                        }
                     )
                 }
             }
@@ -330,7 +437,11 @@ fun GlobalStatusCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = if (isSystemReady) "Listening" else "Inactive",
+                    text = when {
+                        isSystemReady -> "Listening"
+                        isPermissionReady -> "Paused"
+                        else -> "Inactive"
+                    },
                     fontSize = 36.sp,
                     fontWeight = FontWeight.Light,
                     color = Color.White
@@ -350,10 +461,10 @@ fun GlobalStatusCard(
             Spacer(modifier = Modifier.height(12.dp))
 
             Text(
-                text = if (isSystemReady) {
-                    "Ready to bridge navigation notifications to your CMF Watch 3 Pro."
-                } else {
-                    "Access setup requested. Read notifications permission missing or listener offline."
+                text = when {
+                    isSystemReady -> "Ready to bridge navigation notifications to your CMF Watch 3 Pro."
+                    isPermissionReady -> "Turned off above. Maps can navigate without WatchNav interrupting your watch."
+                    else -> "Access setup requested. Read notifications permission missing or listener offline."
                 },
                 fontSize = 14.sp,
                 lineHeight = 20.sp,

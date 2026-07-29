@@ -23,6 +23,9 @@ class NavAccessibilityService : AccessibilityService() {
         if (event == null) return
         if (event.packageName != "com.google.android.apps.maps") return
 
+        // Master switch off — read nothing, post nothing.
+        if (!BridgeState.isEnabledNow(applicationContext)) return
+
         val root = rootInActiveWindow ?: return
         val stepNodes = mutableListOf<String>()
         traverseForSteps(root, stepNodes)

@@ -5,8 +5,13 @@ import android.os.Build
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 class NavListenerService : NotificationListenerService() {
 
@@ -44,9 +49,22 @@ class NavListenerService : NotificationListenerService() {
     private var lastInstruction = ""
     private var lastPostedMs = 0L
 
+    private var scope: CoroutineScope? = null
+
     override fun onListenerConnected() {
         super.onListenerConnected()
         _isServiceConnected.value = true
+
+        // Tear the bridge down the moment the user flips the master switch off,
+        // instead of waiting for the next Maps notification.
+        val newScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        scope = newScope
+        newScope.launch {
+            BridgeState.isEnabled.collect { enabled ->
+                if (!enabled) tearDownBridge()
+            }
+        }
+
         Log.d(TAG, "Notification listener connected.")
     }
 
@@ -54,7 +72,20 @@ class NavListenerService : NotificationListenerService() {
         super.onListenerDisconnected()
         _isServiceConnected.value = false
         isForegroundStarted = false
+        scope?.cancel()
+        scope = null
         Log.d(TAG, "Notification listener disconnected.")
+    }
+
+    /** Clears the watch alert and drops out of the foreground. */
+    private fun tearDownBridge() {
+        NavNotificationHelper.cancel(this)
+        lastInstruction = ""
+        lastPostedMs = 0L
+        if (isForegroundStarted) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            isForegroundStarted = false
+        }
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
@@ -63,6 +94,12 @@ class NavListenerService : NotificationListenerService() {
 
         val packageName = sbn.packageName
         if (!MAPS_PACKAGES.contains(packageName)) return
+
+        // Master switch off — ignore Maps entirely.
+        if (!BridgeState.isEnabledNow(this)) {
+            Log.d(TAG, "Bridge disabled by user — ignoring $packageName notification.")
+            return
+        }
 
         val extras = sbn.notification.extras ?: return
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
@@ -90,11 +127,7 @@ class NavListenerService : NotificationListenerService() {
         // 2. Arrival detection — clear state and stop
         if (combined.contains("arrived") || combined.contains("you have arrived")) {
             Log.d(TAG, "Arrived at destination. Clearing navigation.")
-            NavNotificationHelper.cancel(this)
-            if (isForegroundStarted) {
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                isForegroundStarted = false
-            }
+            tearDownBridge()
             return
         }
 
@@ -172,11 +205,7 @@ class NavListenerService : NotificationListenerService() {
 
         if (MAPS_PACKAGES.contains(sbn.packageName)) {
             Log.d(TAG, "Navigation notification removed for ${sbn.packageName}.")
-            NavNotificationHelper.cancel(this)
-            if (isForegroundStarted) {
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                isForegroundStarted = false
-            }
+            tearDownBridge()
         }
     }
 }
